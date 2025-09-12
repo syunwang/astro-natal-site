@@ -63,7 +63,8 @@ form.addEventListener('submit', async (e) => {
     const [hours, minutes] = timeStr.split(':').map(Number);
     const seconds = 0;
 
-    const geoResp = await fetch("/api/geo", {
+    // 直接呼叫 Netlify Functions
+    const geoResp = await fetch("/.netlify/functions/geo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ location: place })
@@ -95,7 +96,7 @@ form.addEventListener('submit', async (e) => {
       }
     };
 
-    const natalResp = await fetch("/api/natal", {
+    const natalResp = await fetch("/.netlify/functions/natal", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
