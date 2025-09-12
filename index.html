@@ -1,160 +1,137 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Natal Chart Generator</title>
-  <link rel="stylesheet" href="/public/style.css" />
+  <meta charset="UTF-8">
+  <title>出生星盤產生器 - Classic</title>
+  <style>
+    body { font-family: sans-serif; background:#111; color:#eee; text-align:center; padding:20px; }
+    form { background:#1e1e1e; display:inline-block; padding:20px; border-radius:8px; }
+    label { display:block; margin:10px 0; }
+    input, select { padding:5px; margin:5px; }
+    button { padding:10px 20px; background:#4f46e5; color:#fff; border:none; border-radius:6px; cursor:pointer; }
+    button:hover { background:#4338ca; }
+    #result { margin-top:20px; }
+    #chart-box { margin-top:20px; }
+  </style>
 </head>
 <body>
-  <main class="wrap">
-    <h1>出生星盤產生器</h1>
-    <form id="chart-form">
-      <div class="grid">
-        <label>
-          出生日期
-          <input type="date" id="birth-date" required />
-        </label>
-        <label>
-          出生時間（24h）
-          <input type="time" id="birth-time" step="60" required />
-        </label>
-        <label class="full">
-          出生地（英文，例：Taipei, Taiwan）
-          <input type="text" id="birth-place" placeholder="City, Country" required />
-        </label>
-      </div>
+  <h1>出生星盤產生器</h1>
+  <form id="chart-form">
+    <label>出生日期 <input type="date" id="birth-date" required></label>
+    <label>出生時間 (24h) <input type="time" id="birth-time" required></label>
+    <label>出生地 (英文，如: Taipei, Taiwan) <input type="text" id="birth-place" required></label>
+    <label>
+      風格
+      <select id="style">
+        <option value="classic" selected>Classic（黑白粗宮線）</option>
+        <option value="minimal">Minimal（不畫相位線）</option>
+        <option value="major">Major（五大相位）</option>
+        <option value="full">Full（完整相位）</option>
+      </select>
+    </label>
+    <button type="submit">產生星盤</button>
+  </form>
 
-      <details>
-        <summary>進階設定（可選）</summary>
-        <div class="grid">
-          <label>
-            觀測點
-            <select id="observation">
-              <option value="topocentric" selected>topocentric</option>
-              <option value="geocentric">geocentric</option>
-            </select>
-          </label>
-          <label>
-            Ayanamsha
-            <select id="ayanamsha">
-              <option value="tropical" selected>tropical (西洋/Tropical)</option>
-              <option value="sayana">sayana</option>
-              <option value="lahiri">lahiri (恆星/印度)</option>
-            </select>
-          </label>
-          <label>
-            宮位系統
-            <select id="house">
-              <option>Placidus</option>
-              <option>Koch</option>
-              <option>Whole Signs</option>
-              <option>Equal Houses</option>
-              <option>Regiomontanus</option>
-              <option>Vehlow</option>
-            </select>
-          </label>
-          <label>
-            語言
-            <select id="lang">
-              <option value="en" selected>English</option>
-              <option value="ja">日本語</option>
-              <option value="es">Español</option>
-              <option value="fr">Français</option>
-              <option value="pt">Português</option>
-              <option value="ru">Русский</option>
-              <option value="de">Deutsch</option>
-              <option value="pl">Polski</option>
-              <option value="tr">Türkçe</option>
-            </select>
-          </label>
-        </div>
-      </details>
+  <div id="result" class="hidden">
+    <h2>星盤結果</h2>
+    <p id="res-msg"></p>
+    <div id="chart-box"></div>
+  </div>
 
-      <button type="submit">產生星盤</button>
-    </form>
+<script>
+const form = document.getElementById('chart-form');
+const result = document.getElementById('result');
+const chartBox = document.getElementById('chart-box');
+const resMsg = document.getElementById('res-msg');
 
-    <section id="result" class="hidden">
-      <h2>星盤結果</h2>
-      <p id="res-msg"></p>
-      <div id="chart-box"></div>
-      <p id="credit">Powered by FreeAstrologyAPI</p>
-    </section>
-  </main>
+const ASPECTS_MAJOR = ["Conjunction","Opposition","Trine","Square","Sextile"];
 
-  <script>
-  const form = document.getElementById('chart-form');
-  const result = document.getElementById('result');
-  const chartBox = document.getElementById('chart-box');
-  const resMsg = document.getElementById('res-msg');
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  resMsg.textContent = "計算中…";
+  result.classList.remove('hidden');
+  chartBox.innerHTML = "";
 
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    resMsg.textContent = "計算中…";
-    result.classList.remove('hidden');
-    chartBox.innerHTML = "";
+  try {
+    const dateStr = document.getElementById('birth-date').value;
+    const timeStr = document.getElementById('birth-time').value;
+    const place = document.getElementById('birth-place').value.trim();
+    const style = document.getElementById('style')?.value || 'classic';
+    if (!dateStr || !timeStr || !place) throw new Error("請完整填寫表單");
 
-    try {
-      // 1) 讀取表單
-      const dateStr = document.getElementById('birth-date').value; // yyyy-mm-dd
-      const timeStr = document.getElementById('birth-time').value; // HH:MM
-      const place = document.getElementById('birth-place').value.trim();
+    const [year, month, date] = dateStr.split('-').map(Number);
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const seconds = 0;
 
-      if (!dateStr || !timeStr || !place) throw new Error("請完整填寫表單");
+    const geoResp = await fetch("/api/geo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ location: place })
+    });
+    const geo = await geoResp.json();
+    if (!Array.isArray(geo) || !geo.length) throw new Error("找不到該地點，請改用英文或更精確地址");
+    const { latitude, longitude, timezone_offset } = geo[0];
 
-      const [year, month, date] = dateStr.split('-').map(Number);
-      const [hours, minutes] = timeStr.split(':').map(Number);
-      const seconds = 0;
-
-      // 2) 先把地名換成經緯度與時區
-      const geoResp = await fetch("/api/geo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ location: place })
-      });
-      const geo = await geoResp.json();
-      if (!Array.isArray(geo) || !geo.length) throw new Error("找不到該地點，請改用英文或更精確地址");
-      const { latitude, longitude, timezone_offset } = geo[0];
-
-      // 3) 打 natal-wheel-chart 取 SVG URL
-      const natalPayload = {
-        year, month, date, hours, minutes, seconds,
-        latitude, longitude,
-        timezone: timezone_offset, // 注意：API 需求為小時偏移，如 +8
-        config: {
-          observation_point: document.getElementById('observation').value,
-          ayanamsha: document.getElementById('ayanamsha').value,
-          house_system: document.getElementById('house').value,
-          language: document.getElementById('lang').value,
-          exclude_planets: [],
-          allowed_aspects: [
-            "Conjunction","Opposition","Trine","Square","Sextile",
-            "Semi-Sextile","Quintile","Septile","Octile","Novile",
-            "Quincunx","Sesquiquadrate"
-          ]
-        }
-      };
-
-      const natalResp = await fetch("/api/natal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(natalPayload)
-      });
-      const data = await natalResp.json();
-
-      if (!data || !data.output) {
-        throw new Error(data?.error || "產生星盤失敗");
-      }
-
-      resMsg.textContent = "完成！以下為 SVG 星盤：";
-      chartBox.innerHTML = `
-        <object type="image/svg+xml" data="${data.output}" style="width:100%;max-width:800px;height:auto;"></object>
-        <p><a href="${data.output}" target="_blank" rel="noopener">開新分頁檢視原始 SVG</a></p>
-      `;
-    } catch (err) {
-      resMsg.textContent = "錯誤：" + err.message;
+    let allowed_aspects = [];
+    if (style === "major" || style === "classic") allowed_aspects = ASPECTS_MAJOR;
+    if (style === "full") {
+      allowed_aspects = [
+        "Conjunction","Opposition","Trine","Square","Sextile",
+        "Semi-Sextile","Quintile","Septile","Octile","Novile",
+        "Quincunx","Sesquiquadrate"
+      ];
     }
-  });
-  </script>
+
+    const payload = {
+      year, month, date, hours, minutes, seconds,
+      latitude, longitude, timezone: timezone_offset,
+      config: {
+        observation_point: "topocentric",
+        ayanamsha: "tropical",
+        house_system: "Placidus",
+        language: "en",
+        exclude_planets: [],
+        allowed_aspects
+      }
+    };
+
+    const natalResp = await fetch("/api/natal", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await natalResp.json();
+    if (!data || !data.output) throw new Error(data?.error || "產生星盤失敗");
+
+    const svgText = await fetch(data.output).then(r => r.text());
+
+    const cssClassic = `
+      svg { background:#fff; }
+      circle, line, path { stroke:#111 !important; stroke-width:1.2 !important; }
+      [id*="house"], [class*="house"], [id*="cusp"], [class*="cusp"] {
+        stroke:#111 !important; stroke-width:2.2 !important;
+      }
+      [id*="aspect"], [class*="aspect"] { stroke:#999 !important; opacity:.55; stroke-width:.6 !important; }
+      [id*="grid"], [class*="grid"] { stroke:#ccc !important; opacity:.35; }
+      text { fill:#111 !important; font-size:13px !important; font-family: sans-serif; }
+      [id*="zodiac"] text, [class*="zodiac"] text { fill:#111 !important; }
+    `;
+
+    const cssMinimal = `[id*="aspect"], [class*="aspect"] { display:none !important; }`;
+    const cssMajor = `[id*="aspect"], [class*="aspect"] { opacity:.35; stroke-width:.9 !important; }`;
+    const cssFull = `[id*="grid"], [class*="grid"] { opacity:.3; }`;
+
+    const css = style === "classic" ? cssClassic :
+                style === "minimal" ? cssMinimal :
+                style === "major" ? cssMajor : cssFull;
+
+    const injected = svgText.replace(/<svg([^>]+)>/, `<svg$1><style>${css}</style>`);
+
+    resMsg.textContent = "完成！以下為 SVG 星盤：";
+    chartBox.innerHTML = `<div style="max-width:900px;overflow:auto;">${injected}</div>`;
+  } catch (err) {
+    resMsg.textContent = "錯誤：" + err.message;
+  }
+});
+</script>
 </body>
 </html>
