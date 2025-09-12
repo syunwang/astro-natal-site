@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Natal Chart Generator</title>
+  <link rel="stylesheet" href="/public/style.css" />
+</head>
+<body>
+  <main class="wrap">
+    <h1>出生星盤產生器</h1>
+    <form id="chart-form">
+      <div class="grid">
+        <label>
+          出生日期
+          <input type="date" id="birth-date" required />
+        </label>
+        <label>
+          出生時間（24h）
+          <input type="time" id="birth-time" step="60" required />
+        </label>
+        <label class="full">
+          出生地（英文，例：Taipei, Taiwan）
+          <input type="text" id="birth-place" placeholder="City, Country" required />
+        </label>
+      </div>
+
+      <details>
+        <summary>進階設定（可選）</summary>
+        <div class="grid">
+          <label>
+            觀測點
+            <select id="observation">
+              <option value="topocentric" selected>topocentric</option>
+              <option value="geocentric">geocentric</option>
+            </select>
+          </label>
+          <label>
+            Ayanamsha
+            <select id="ayanamsha">
+              <option value="tropical" selected>tropical (西洋/Tropical)</option>
+              <option value="sayana">sayana</option>
+              <option value="lahiri">lahiri (恆星/印度)</option>
+            </select>
+          </label>
+          <label>
+            宮位系統
+            <select id="house">
+              <option>Placidus</option>
+              <option>Koch</option>
+              <option>Whole Signs</option>
+              <option>Equal Houses</option>
+              <option>Regiomontanus</option>
+              <option>Vehlow</option>
+            </select>
+          </label>
+          <label>
+            語言
+            <select id="lang">
+              <option value="en" selected>English</option>
+              <option value="ja">日本語</option>
+              <option value="es">Español</option>
+              <option value="fr">Français</option>
+              <option value="pt">Português</option>
+              <option value="ru">Русский</option>
+              <option value="de">Deutsch</option>
+              <option value="pl">Polski</option>
+              <option value="tr">Türkçe</option>
+            </select>
+          </label>
+        </div>
+      </details>
+
+      <button type="submit">產生星盤</button>
+    </form>
+
+    <section id="result" class="hidden">
+      <h2>星盤結果</h2>
+      <p id="res-msg"></p>
+      <div id="chart-box"></div>
+      <p id="credit">Powered by FreeAstrologyAPI</p>
+    </section>
+  </main>
+
+  <script>
+  const form = document.getElementById('chart-form');
+  const result = document.getElementById('result');
+  const chartBox = document.getElementById('chart-box');
+  const resMsg = document.getElementById('res-msg');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    resMsg.textContent = "計算中…";
+    result.classList.remove('hidden');
+    chartBox.innerHTML = "";
+
+    try {
+      // 1) 讀取表單
+      const dateStr = document.getElementById('birth-date').value; // yyyy-mm-dd
+      const timeStr = document.getElementById('birth-time').value; // HH:MM
+      const place = document.getElementById('birth-place').value.trim();
+
+      if (!dateStr || !timeStr || !place) throw new Error("請完整填寫表單");
+
+      const [year, month, date] = dateStr.split('-').map(Number);
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      const seconds = 0;
+
+      // 2) 先把地名換成經緯度與時區
+      const geoResp = await fetch("/api/geo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ location: place })
+      });
+      const geo = await geoResp.json();
+      if (!Array.isArray(geo) || !geo.length) throw new Error("找不到該地點，請改用英文或更精確地址");
+      const { latitude, longitude, timezone_offset } = geo[0];
+
+      // 3) 打 natal-wheel-chart 取 SVG URL
+      const natalPayload = {
+        year, month, date, hours, minutes, seconds,
+        latitude, longitude,
+        timezone: timezone_offset, // 注意：API 需求為小時偏移，如 +8
+        config: {
+          observation_point: document.getElementById('observation').value,
+          ayanamsha: document.getElementById('ayanamsha').value,
+          house_system: document.getElementById('house').value,
+          language: document.getElementById('lang').value,
+          exclude_planets: [],
+          allowed_aspects: [
+            "Conjunction","Opposition","Trine","Square","Sextile",
+            "Semi-Sextile","Quintile","Septile","Octile","Novile",
+            "Quincunx","Sesquiquadrate"
+          ]
+        }
+      };
+
+      const natalResp = await fetch("/api/natal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(natalPayload)
+      });
+      const data = await natalResp.json();
+
+      if (!data || !data.output) {
+        throw new Error(data?.error || "產生星盤失敗");
+      }
+
+      resMsg.textContent = "完成！以下為 SVG 星盤：";
+      chartBox.innerHTML = `
+        <object type="image/svg+xml" data="${data.output}" style="width:100%;max-width:800px;height:auto;"></object>
+        <p><a href="${data.output}" target="_blank" rel="noopener">開新分頁檢視原始 SVG</a></p>
+      `;
+    } catch (err) {
+      resMsg.textContent = "錯誤：" + err.message;
+    }
+  });
+  </script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+:root { font-family: ui-sans-serif, system-ui, -apple-system, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif; }
+body { margin: 0; background: #0e0f13; color: #e6e6ea; }
+.wrap { max-width: 920px; margin: 40px auto; padding: 0 20px; }
+h1,h2 { letter-spacing: .5px; }
+form { background: #141622; border: 1px solid #2a2e45; padding: 20px; border-radius: 14px; }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0,1fr)); }
+.grid .full { grid-column: 1 / -1; }
+label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+input, select, button { padding: 10px 12px; border-radius: 10px; border: 1px solid #2a2e45; background: #0e0f13; color: #e6e6ea; }
+button { background: #4f46e5; border-color: transparent; cursor: pointer; }
+button:hover { filter: brightness(1.1); }
+#result { margin-top: 24px; background:#141622; border:1px solid #2a2e45; padding:20px; border-radius:14px; }
+.hidden { display:none; }
+#credit { opacity: .7; font-size: 12px; margin-top: 10px; }
+@media (max-width: 700px) {
+  .grid { grid-template-columns: 1fr; }
+}
