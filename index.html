@@ -3,60 +3,33 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>出生星盤產生器（Classic / 內嵌 SVG）</title>
+  <title>出生星盤產生器（除錯強化版 / 內嵌 SVG）</title>
   <style>
-    :root{
-      --bg:#111215; --card:#1a1c20; --text:#e6e7ea; --muted:#a6adbb; --accent:#6d8cff; --danger:#ff5c7a; --ok:#27c093;
-      --input:#23252b; --border:#2d3138;
-    }
+    :root{--bg:#111215;--card:#1a1c20;--text:#e6e7ea;--muted:#a6adbb;--accent:#6d8cff;--border:#2d3138;--input:#23252b}
     *{box-sizing:border-box}
-    body{
-      margin:0; background:var(--bg); color:var(--text);
-      font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,'Noto Sans',sans-serif;
-      letter-spacing:.2px;
-    }
-    .wrap{max-width:1000px; margin:32px auto; padding:0 16px;}
-    h1{margin:0 0 16px; font-size:28px; font-weight:800;}
-    .card{
-      background:var(--card); border:1px solid var(--border); border-radius:14px;
-      padding:20px; box-shadow:0 10px 30px #00000033;
-    }
-    .grid{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px;}
-    .row{display:flex; gap:12px; align-items:center; flex-wrap:wrap;}
-    label{font-size:14px; color:var(--muted)}
-    input,select{
-      width:100%; background:var(--input); color:var(--text);
-      border:1px solid var(--border); border-radius:10px; padding:10px 12px;
-      outline:none;
-    }
-    input:focus,select:focus{border-color:var(--accent); box-shadow:0 0 0 3px #6d8cff22;}
-    .btn{
-      display:inline-flex; align-items:center; gap:8px;
-      background:var(--accent); color:#fff; font-weight:700;
-      border:0; border-radius:12px; padding:12px 18px; cursor:pointer;
-      transition:transform .05s ease, filter .15s ease;
-    }
-    .btn:hover{filter:brightness(1.05)}
-    .btn:active{transform:translateY(1px)}
-    .muted{color:var(--muted); font-size:14px;}
-    .switch{display:flex; align-items:center; gap:8px; margin:8px 0 0}
-    .switch input{width:auto}
-    .result{
-      margin-top:18px; padding:16px; background:#0d0f12; border:1px dashed var(--border); border-radius:12px; min-height:120px;
-      overflow:auto;
-    }
-    .msg{padding:10px 12px; border-radius:10px; background:#20242b; color:var(--muted); margin:8px 0}
-    .msg.err{background:#2a1c22; color:#ff93a8; border:1px solid #ff5c7a44}
-    .msg.ok{background:#14231e; color:#7ae0bf; border:1px solid #27c09344}
-    .hr{height:1px; background:var(--border); margin:16px 0}
-    @media (max-width:760px){ .grid{grid-template-columns:1fr} .wrap{padding:0 12px} }
-    /* 內嵌 SVG 置中顯示 */
-    .svg-holder svg{display:block; margin:auto; height:auto; max-width:100%}
+    body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,'Noto Sans',sans-serif}
+    .wrap{max-width:980px;margin:28px auto;padding:0 16px}
+    h1{margin:0 0 12px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px}
+    label{font-size:14px;color:var(--muted)}
+    input{width:100%;background:var(--input);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text)}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .btn{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#fff;border:0;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer}
+    .muted{color:var(--muted);font-size:13px}
+    .result{margin-top:12px;padding:12px;background:#0d0f12;border:1px dashed var(--border);border-radius:10px;min-height:100px;overflow:auto}
+    .msg{padding:8px 10px;border-radius:10px;background:#222631;color:#9fb3ff;margin:8px 0}
+    .msg.err{background:#2a1c22;color:#ff93a8;border:1px solid #ff5c7a44}
+    .msg.ok{background:#14231e;color:#7ae0bf;border:1px solid #27c09344}
+    @media (max-width:760px){.grid{grid-template-columns:1fr}}
+    .svg-holder svg{display:block;margin:auto;max-width:100%}
+    pre{white-space:pre-wrap;word-break:break-all;}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>出生星盤產生器（Classic 風格 / 內嵌 SVG）</h1>
+    <h1>出生星盤產生器（除錯強化版 / 內嵌 SVG）</h1>
+    <div class="msg">站台：<code id="siteOrigin"></code></div>
     <div class="card">
       <div class="grid">
         <div>
@@ -69,163 +42,125 @@
         </div>
         <div>
           <label>出生地（英文，例：Tainan, Taiwan）</label>
-          <input id="location" type="text" placeholder="City, Country（如：Tainan, Taiwan）" />
-          <div class="switch">
-            <input id="manualLatLng" type="checkbox" />
-            <label for="manualLatLng">改用手動輸入經緯度</label>
+          <input id="location" type="text" placeholder="City, Country" />
+          <div class="row" style="margin-top:6px">
+            <input id="manual" type="checkbox" />
+            <label for="manual">改用手動經緯度</label>
           </div>
         </div>
-        <div id="latlngGroup" style="display:none">
+        <div id="latlngBox" style="display:none">
           <div class="row" style="gap:8px">
             <div style="flex:1">
-              <label>緯度 (Latitude)</label>
-              <input id="lat" type="number" step="0.00001" placeholder="例如：22.99083" />
+              <label>緯度</label>
+              <input id="lat" type="number" step="0.00001" />
             </div>
             <div style="flex:1">
-              <label>經度 (Longitude)</label>
-              <input id="lng" type="number" step="0.00001" placeholder="例如：120.21333" />
+              <label>經度</label>
+              <input id="lng" type="number" step="0.00001" />
             </div>
             <div style="flex:1">
-              <label>時區 (UTC+N)</label>
-              <input id="tz" type="number" step="0.5" placeholder="例如：8" />
+              <label>時區</label>
+              <input id="tz" type="number" step="0.5" placeholder="台灣：8" />
             </div>
           </div>
-          <div class="muted">不知道時區？臺灣用 <b>8</b>。</div>
         </div>
       </div>
-
-      <div class="hr"></div>
-      <button class="btn" id="goBtn">產生星盤</button>
-      <div id="hint" class="msg" style="display:none"></div>
-
-      <div class="result">
-        <div id="out" class="svg-holder muted">（結果會顯示在這裡）</div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="btn">產生星盤</button>
+        <button class="btn" id="pingBtn" style="background:#4fb388">檢查 Functions</button>
       </div>
+      <div id="hint" class="msg" style="display:none"></div>
+      <div class="result">
+        <div id="out" class="svg-holder muted">（結果會顯示在此）</div>
+      </div>
+      <details style="margin-top:10px">
+        <summary>詳細除錯輸出</summary>
+        <pre id="log"></pre>
+      </details>
     </div>
-    <p class="muted" style="margin:12px 2px 0">Powered by Netlify Functions ＆ FreeAstrologyAPI</p>
   </div>
+<script>
+const $=q=>document.querySelector(q);
+const logEl=$('#log'); const out=$('#out'); const hint=$('#hint'); const btn=$('#btn'); const pingBtn=$('#pingBtn');
+const manual=$('#manual'); const latlngBox=$('#latlngBox'); const lat=$('#lat'); const lng=$('#lng'); const tz=$('#tz');
+const birthDate=$('#birthDate'); const birthTime=$('#birthTime'); const locationInput=$('#location');
+$('#siteOrigin').textContent=location.origin;
+(() => {const d=new Date();const pad=n=>String(n).padStart(2,'0');birthDate.value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;birthTime.value='08:00';})();
+manual.addEventListener('change',()=>{latlngBox.style.display=manual.checked?'':'none'});
 
-  <script>
-    const $ = (q)=>document.querySelector(q);
-    const birthDate = $('#birthDate');
-    const birthTime = $('#birthTime');
-    const locationInput = $('#location');
-    const manualLatLng = $('#manualLatLng');
-    const latlngGroup = $('#latlngGroup');
-    const latInput = $('#lat');
-    const lngInput = $('#lng');
-    const tzInput  = $('#tz');
-    const out = $('#out');
-    const hint = $('#hint');
-    const goBtn = $('#goBtn');
+function log(...a){console.log(...a); logEl.textContent += a.map(x=> typeof x==='string'?x:JSON.stringify(x,null,2)).join(' ') + '\\n';}
 
-    (() => {
-      const d = new Date();
-      const pad = n => String(n).padStart(2,'0');
-      birthDate.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-      birthTime.value = `08:00`;
-    })();
+function url(p){return location.origin.replace(/\\/$/,'') + (p.startsWith('/')?'':'/') + p;}
 
-    manualLatLng.addEventListener('change', () => {
-      latlngGroup.style.display = manualLatLng.checked ? '' : 'none';
-    });
+async function postJSON(u,data){
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), 15000);
+  log('POST', u, data);
+  const r = await fetch(u, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data),signal:controller.signal});
+  clearTimeout(timer);
+  log('status', r.status, r.statusText);
+  if(!r.ok){
+    const t = await r.text().catch(()=>'');
+    throw new Error('HTTP '+r.status+' '+r.statusText+'\\n'+t);
+  }
+  return r.json();
+}
 
-    function showMsg(text, type='info'){
-      hint.style.display='block';
-      hint.className='msg'+(type==='err'?' err':(type==='ok'?' ok':'')); 
-      hint.textContent = text;
+function show(msg,type){hint.style.display='block';hint.className='msg'+(type==='err'?' err':(type==='ok'?' ok':''));hint.textContent=msg;}
+
+async function pingFunctions(){
+  try{
+    const g = await fetch(url('/.netlify/functions/geo'));
+    const n = await fetch(url('/.netlify/functions/natal'));
+    log('GET /geo ->', g.status, g.statusText);
+    log('GET /natal ->', n.status, n.statusText);
+    if(g.status===405 && n.status===405){
+      show('Functions 可達（GET 405 屬正常）。', 'ok');
+    }else{
+      show('Functions 連線異常，請確認部署。', 'err');
     }
+  }catch(e){
+    log('ping error', e.name, e.message);
+    show('無法連到 Functions：'+e.message, 'err');
+  }
+}
 
-    function clearMsg(){ hint.style.display='none'; }
+pingBtn.addEventListener('click', pingFunctions);
 
-    async function postJSON(url, data){
-      const r = await fetch(url, {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(data)
-      });
-      if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-      return r.json();
+btn.addEventListener('click', async () => {
+  hint.style.display='none'; out.textContent='產生中…'; btn.disabled=true; logEl.textContent='';
+  try{
+    const [y,m,d]=birthDate.value.split('-').map(Number);
+    const [hh,mm]=(birthTime.value||'00:00').split(':').map(Number);
+    let latV, lngV, tzV;
+    if(manual.checked){
+      latV=parseFloat(lat.value); lngV=parseFloat(lng.value); tzV=parseFloat(tz.value||'8');
+      if(!isFinite(latV)||!isFinite(lngV)) throw new Error('請輸入有效經緯度');
+    }else{
+      const q=locationInput.value.trim(); if(!q) throw new Error('請輸入地點');
+      const geo=await postJSON(url('/.netlify/functions/geo'),{location:q});
+      log('geo resp', geo);
+      const hit = Array.isArray(geo) ? (geo.find(r => /taiwan/i.test(r.country||'')||/asia\\/taipei/i.test(r.timezone||'')) || geo[0]) : geo;
+      if(!hit) throw new Error('找不到地點');
+      latV=parseFloat(hit.latitude); lngV=parseFloat(hit.longitude); tzV=parseFloat(hit.timezone_offset||8);
     }
-
-    function pickTaiwanPrefer(results){
-      if(!Array.isArray(results) || results.length===0) return null;
-      const prefer = results.find(r =>
-        /taiwan/i.test(r.country||'') ||
-        /taiwan/i.test(r.administrative_zone_1||'') ||
-        /asia\/taipei/i.test(r.timezone||'')
-      ) || results[0];
-      return prefer;
-    }
-
-    async function resolveLocation(q){
-      const data = await postJSON('/.netlify/functions/geo', {location:q});
-      const hit = pickTaiwanPrefer(data);
-      if(!hit) throw new Error('找不到地點，請改用經緯度或調整關鍵字（例：Tainan, Taiwan）');
-      return {
-        lat: Number(hit.latitude),
-        lng: Number(hit.longitude),
-        tz : Number(hit.timezone_offset ?? 8)
-      };
-    }
-
-    async function fetchSVGAndEmbed(url){
-      const res = await fetch(url);
-      const svg = await res.text();
-      out.innerHTML = svg;
-    }
-
-    goBtn.addEventListener('click', async () => {
-      clearMsg();
-      out.textContent = '正在產生中…';
-      goBtn.disabled = true;
-
-      try{
-        const [y,m,d] = birthDate.value.split('-').map(n=>Number(n));
-        const [hh,mm] = (birthTime.value || '00:00').split(':').map(n=>Number(n));
-        const ss = 0;
-
-        let lat,lng,tz;
-        if(manualLatLng.checked){
-          lat = Number(latInput.value);
-          lng = Number(lngInput.value);
-          tz  = Number(tzInput.value || 8);
-          if(!isFinite(lat)||!isFinite(lng)) throw new Error('請輸入正確的經緯度數字');
-        }else{
-          const q = locationInput.value.trim();
-          if(!q) throw new Error('請輸入地名（英文，例：Tainan, Taiwan）');
-          const loc = await resolveLocation(q);
-          lat = loc.lat; lng = loc.lng; tz = loc.tz || 8;
-        }
-
-        const payload = {
-          year:y, month:m, date:d,
-          hours:hh, minutes:mm, seconds:ss,
-          latitude:lat, longitude:lng, timezone:tz,
-          config:{
-            observation_point:'topocentric',
-            ayanamsha:'tropical',
-            house_system:'Placidus',
-            language:'en',
-            exclude_planets:[],
-            allowed_aspects:['Conjunction','Opposition','Trine','Square','Sextile']
-          }
-        };
-
-        const natalResp = await postJSON('/.netlify/functions/natal', payload);
-        const svgUrl = natalResp.output || natalResp.url || natalResp.svg || natalResp.result;
-        if(!svgUrl) throw new Error('產生成功但未取得 SVG 連結，請檢查 function 回傳格式');
-
-        await fetchSVGAndEmbed(svgUrl);
-        showMsg('完成！已將 Classic 風格星盤內嵌於下方。', 'ok');
-      }catch(err){
-        console.error(err);
-        out.textContent = '（沒有結果）';
-        showMsg(err.message || '發生錯誤，請稍後再試或改用手動輸入經緯度。', 'err');
-      }finally{
-        goBtn.disabled = false;
-      }
-    });
-  </script>
+    const payload={year:y,month:m,date:d,hours:hh,minutes:mm,seconds:0,latitude:latV,longitude:lngV,timezone:tzV,
+      config:{observation_point:'topocentric',ayanamsha:'tropical',house_system:'Placidus',language:'en',exclude_planets:[],allowed_aspects:['Conjunction','Opposition','Trine','Square','Sextile']}};
+    const natal=await postJSON(url('/.netlify/functions/natal'),payload);
+    log('natal resp', natal);
+    const svgUrl = natal.output || natal.url || natal.svg || natal.result;
+    if(!svgUrl) throw new Error('後端未回傳 SVG/URL 欄位');
+    const txt = await fetch(svgUrl).then(r=>r.text());
+    out.innerHTML = txt;
+    show('完成！已內嵌 Classic SVG。', 'ok');
+  }catch(e){
+    log('ERR', e.name, e.message);
+    show((e.name==='AbortError'?'請求逾時：':'錯誤：') + e.message, 'err');
+    out.textContent='（沒有結果）';
+  }finally{
+    btn.disabled=false;
+  }
+});
+</script>
 </body>
 </html>
