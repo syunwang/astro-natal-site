@@ -1,17 +1,7 @@
+
 [build]
-  command = ""
+  functions = "netlify/functions"
   publish = "."
 
 [functions]
-  directory = "netlify/functions"
   node_bundler = "esbuild"
-
-[[redirects]]
-  from = "/api/geo"
-  to = "/.netlify/functions/geo"
-  status = 200
-
-[[redirects]]
-  from = "/api/natal"
-  to = "/.netlify/functions/natal"
-  status = 200

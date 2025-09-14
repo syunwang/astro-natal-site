@@ -1,26 +1,23 @@
 // netlify/functions/geo.js
-export async function handler(event) {
+export async function handler(event, context) {
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: 'Method Not Allowed' };
+  }
   try {
-    if (event.httpMethod !== "POST") {
-      return { statusCode: 405, body: "Method Not Allowed" };
-    }
-    const { location } = JSON.parse(event.body || "{}");
-    if (!location) {
-      return { statusCode: 400, body: "Missing 'location'" };
-    }
-
-    const resp = await fetch("https://json.freeastrologyapi.com/geo-details", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.FREEASTRO_API_KEY
-      },
-      body: JSON.stringify({ location })
-    });
-
-    const data = await resp.json();
-    return { statusCode: 200, body: JSON.stringify(data) };
-  } catch (err) {
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+    const { location } = JSON.parse(event.body || '{}');
+    if(!location) return { statusCode: 400, body: JSON.stringify({ error:'Missing location' })};
+    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=5&language=en&format=json`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const results = (data && data.results || []).map(it => ({
+      location_name: it.name,
+      latitude: it.latitude,
+      longitude: it.longitude,
+      timezone: it.timezone || null,
+      country: it.country
+    }));
+    return { statusCode: 200, body: JSON.stringify({ results })};
+  } catch (e) {
+    return { statusCode: 500, body: JSON.stringify({ error: e.message })};
   }
 }

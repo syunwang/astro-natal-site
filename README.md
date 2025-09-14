@@ -1,24 +1,65 @@
-# Astro Natal Site (FreeAstrologyAPI + Netlify)
+# Astro Natal Site
 
-一個最小可用的單頁網站：輸入出生日期/時間/地點 → 後端呼叫 FreeAstrologyAPI → 顯示 SVG 出生星盤。
+一个基于 **Netlify Functions + FreeAstrology API** 的出生星盘生成器。  
+支持 Classic 风格渲染，前端直接内嵌 SVG。
 
-## 快速部署（Netlify）
-1. 把整個資料夾上傳到 GitHub。
-2. 在 Netlify 建立 **New site from Git**，Build command 留空、Publish 設為 `.`。
-3. 到 **Site configuration → Environment variables** 新增：
-   - `FREEASTRO_API_KEY` = 你的 API 金鑰
-4. 部署完成後開啟網站測試。
+---
 
-## 本機測試
-- 安裝 Netlify CLI：`npm i -g netlify-cli`
-- 在專案根目錄執行：`netlify dev`
-- 在 Netlify 專案上設定好環境變數後，再執行本機開發會自動提供函式的金鑰。
+## 📂 项目结构
+astro-natal-site/
+│
+├─ index.html # 主页面（内嵌CSS/JS）
+├─ netlify.toml # Netlify 配置文件
+├─ README.md # 项目说明
+│
+└─ netlify/
+└─ functions/
+├─ geo.js # 地理位置API 代理(Open-Meteo Geocoding)
+└─ natal.js # 星盘生成API 代理(FreeAstrology API)
 
-## 結構
-- `index.html` 前端表單 + 呼叫 `/api/geo` 和 `/api/natal`。
-- `netlify/functions/geo.js` 代理 `POST https://json.freeastrologyapi.com/geo-details`
-- `netlify/functions/natal.js` 代理 `POST https://json.freeastrologyapi.com/western/natal-wheel-chart`
-- `public/style.css` 基本樣式
-- `netlify.toml` Functions 與路由設定
+---
 
-> 安全性：API 金鑰只存在 Netlify 環境變數與函式內，不會暴露在前端。
+## 🚀 部署步骤
+
+### 1. 推送到 GitHub
+```bash
+git add .
+git commit -m "Clean project structure for Netlify deploy"
+git push origin main
+2. 连接Netlify
+
+在Netlify 后台创建站点或绑定已有仓库
+
+部署时会自动识别netlify.toml
+
+3. 设置环境变量
+
+进入Netlify → Site configuration → Environme
+添加：
+
+FREEASTRO_API_KEY = <你的 FreeAstrology API key>
+
+4. 自动部署
+
+每次推送到GitHub 的main分支，Netlify 都会自动重新部署。
+完成后访问：
+
+https://<你的站点名>.netlify.app
+
+🛠️ 开发说明
+
+前端通过fetch('/.netlify/functions/geo')和`fetch('/.netlify/functions/natal')调用函数
+
+函数在服务端代理外部API，避免前端直接暴露API key
+
+如果要更换API，只需修改geo.js或natal.js即可
+
+📜 License
+
+MIT
+
+---
+
+📌 这样一来，目录说明、部署步骤和维护指南都清晰了，不会混淆临时测试说明。  
+
+要不要我再帮你把 **geo.js / natal.js 最终版（含容错处理）** 一起写好，这样你的整个 repo 就真正“production ready”？
