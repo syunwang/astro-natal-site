@@ -1,1 +1,167 @@
-<!doctype html><html><head><meta charset='utf-8'><title>出生星盘生成器</title></head><body>OK</body></html>
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>出生星盘生成器（完整版 / 内嵌SVG / 容错增强）</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0d1117;color:#e6edf3;margin:0;}
+    .wrap{max-width:1000px;margin:30px auto;padding:0 16px}
+    h1{font-size:26px;margin-bottom:18px}
+    .card{background:#161b22;padding:18px;border-radius:10px;margin-bottom:22px;border:1px solid #30363d}
+    label{font-size:14px;color:#9aa0a6;display:block;margin:8px 0 6px}
+    input,button,select{padding:10px;border-radius:6px;border:1px solid #30363d;font-size:15px;background:#0d1117;color:#e6edf3;width:100%}
+    button{cursor:pointer;background:#238636;color:#fff;border:none}
+    button.secondary{background:#30363d}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .result{background:#0d1117;border:1px dashed #30363d;padding:12px;min-height:220px;border-radius:10px}
+    .err{color:#f85149;margin-top:8px}
+    .raw{font-family:monospace;white-space:pre-wrap;background:#0d1117;color:#9aa0a6;border:1px dashed #30363d;border-radius:10px;padding:10px}
+    .svgbox{background:#fff;color:#000;padding:8px;border-radius:8px;overflow:auto}
+    .status{display:inline-block; background:#161b22;border:1px solid #30363d;color:#c9d1d9;border-radius:999px;padding:4px 10px;font-size:12px;margin-left:8px}
+    .ok{color:#3fb950} .bad{color:#f85149}
+    details{margin-top:10px}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>出生星盘生成器 <span id="fnStatus" class="status">状态：未知</span></h1>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>出生日期</label>
+        <input id="date" type="date" value="1958-01-07"/>
+      </div>
+      <div>
+        <label>出生时间（24h）</label>
+        <input id="time" type="time" value="08:50" step="60"/>
+      </div>
+    </div>
+
+    <label style="margin-top:12px">出生地（英文，例如：Tainan, Taiwan）</label>
+    <input id="loc" placeholder="Tainan, Taiwan" value="Tainan, Taiwan"/>
+
+    <label style="margin-top:12px">
+      <input id="manual" type="checkbox" style="width:auto;vertical-align:middle;margin-right:6px"/>
+      改用手动经纬度
+    </label>
+
+    <div class="row">
+      <div><input id="lat" placeholder="latitude（例如：22.99083）"/></div>
+      <div><input id="lon" placeholder="longitude（例如：120.21333）"/></div>
+    </div>
+
+    <label style="margin-top:12px">时区（UTC 偏移，例如台湾 8）</label>
+    <input id="tz" placeholder="8"/>
+
+    <div class="row" style="margin-top:16px">
+      <button id="btnCheck" class="secondary">检查 Functions</button>
+      <button id="btnMake">产生星盘</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="out" class="result">( 结果会显示在此 )</div>
+    <div id="err" class="err"></div>
+    <details><summary>原始 API 返回</summary>
+      <pre id="raw" class="raw"></pre>
+    </details>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const out = $("#out"), err = $("#err"), raw = $("#raw"), status = $("#fnStatus");
+
+function setStatus(okGeo, okNatal){
+  if (okGeo === null || okNatal === null) {
+    status.textContent = "状态：未知";
+    status.classList.remove("ok","bad"); return;
+  }
+  status.innerHTML = `状态： geo: <span class="${okGeo? 'ok':'bad'}">${okGeo? '200':'失败'}</span> / natal: <span class="${okNatal? 'ok':'bad'}">${okNatal? '200':'失败'}</span>`;
+}
+
+async function callGeo(name){
+  const r = await fetch("/.netlify/functions/geo", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ location: name })
+  });
+  const txt = await r.text();
+  let js; try{ js = JSON.parse(txt);}catch{ js = { error:"non-json", raw:txt } }
+  return { ok:r.ok, data:js, status:r.status, raw:txt };
+}
+
+async function callNatal(payload){
+  const r = await fetch("/.netlify/functions/natal",{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify(payload)
+  });
+  const ct = r.headers.get("content-type") || "";
+  const txt = await r.text();
+  return { ok:r.ok, text:txt, status:r.status, ct };
+}
+
+// 检查 functions
+$("#btnCheck").addEventListener("click", async ()=>{
+  err.textContent = ""; raw.textContent = ""; out.textContent = "检测中…";
+
+  const g = await callGeo($("#loc").value || "Tainan, Taiwan");
+  const okGeo = g.ok;
+
+  const payload = {
+    year:1958, month:1, date:7, hours:8, minutes:50, seconds:0,
+    latitude: 22.99083, longitude: 120.21333, timezone: 8
+  };
+  const n = await callNatal(payload);
+  const okNatal = n.ok && (n.ct.includes("image/svg+xml") || n.text.trim().startsWith("<svg"));
+
+  setStatus(okGeo, okNatal);
+  out.textContent = "检查完成。";
+  if(!okGeo) err.textContent = "geo 路由调用失败：" + (g.data?.error || g.status);
+  if(!okNatal) err.textContent += (err.textContent? " / ":"") + "natal 路由调用失败：" + n.status;
+  raw.textContent = (!okNatal ? n.text : "") || "";
+});
+
+// 生成星盘
+$("#btnMake").addEventListener("click", async ()=>{
+  err.textContent = ""; raw.textContent = "";
+  out.textContent = "生成中…";
+
+  const [y,m,d] = ($("#date").value || "1958-01-07").split("-").map(n=>+n);
+  const [hh,mm] = ($("#time").value || "08:50").split(":").map(n=>+n);
+  let lat = $("#lat").value.trim(), lon = $("#lon").value.trim(), tz = $("#tz").value.trim();
+
+  if (!$("#manual").checked) {
+    const g = await callGeo($("#loc").value || "Tainan, Taiwan");
+    if (!g.ok) { out.textContent = ""; err.textContent = "地理解析失败：" + (g.data?.error || g.status); raw.textContent = g.raw || ""; return; }
+    lat = g.data.latitude; lon = g.data.longitude; tz  = g.data.timezone_offset ?? 8;
+  }
+
+  if (!lat || !lon || !tz) {
+    out.textContent = ""; err.textContent = "缺少经纬度或时区"; return;
+  }
+
+  const payload = {
+    year:y, month:m, date:d, hours:hh, minutes:mm, seconds:0,
+    latitude:+lat, longitude:+lon, timezone:+tz
+  };
+
+  const n = await callNatal(payload);
+
+  if (n.ok && (n.ct.includes("image/svg+xml") || n.text.trim().startsWith("<svg"))) {
+    out.innerHTML = `<div class="svgbox">${n.text}</div>`;
+  } else {
+    out.textContent = "";
+    err.textContent = "API 未返回 SVG / 链接";
+    raw.textContent = n.text || "";
+  }
+});
+
+// 初始化
+setStatus(null, null);
+</script>
+</body>
+</html>
