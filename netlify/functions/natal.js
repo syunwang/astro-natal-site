@@ -1,126 +1,98 @@
+// netlify/functions/natal.js
+// Node 18+ on Netlify has global fetch.
 
-/**
- * Netlify Function: natal
- * Purpose: Proxy request to FreeAstrologyAPI - Western Natal Wheel Chart
- * 
- * Env Vars required in Netlify (Site configuration → Environment variables):
- *  - FREEASTRO_API_KEY   : Your FreeAstrologyAPI key (required)
- *  - FREEASTRO_API_URL   : Optional. Defaults to 'https://json.freeastrologyapi.com/western/natal-wheel-chart'
- * 
- * Method: POST
- * Body (JSON):
- *  {
- *    "year": 1958,
- *    "month": 1,
- *    "day": 7,
- *    "hour": 8,
- *    "minute": 50,
- *    "latitude": 22.99083,
- *    "longitude": 120.21333,
- *    "timezone": 8,
- *    "language": "en"   // or "zh-Hans" / "zh-Hant"
- *  }
- */
+const UPSTREAM_URL_FALLBACK =
+  "https://json.freeastrologyapi.com/api/v1/western/natal-wheel-chart"; // 新的 json 域名
+const TIMEOUT_MS = 45000;
 
-const DEFAULT_URL = "https://json.freeastrologyapi.com/western/natal-wheel-chart";
+exports.handler = async (event) => {
+  // 仅允许 POST
+  if (event.httpMethod !== "POST") {
+    return jsonResp(405, { error: "Method Not Allowed. Use POST." });
+  }
 
-// simple json responder
-const jsonResponse = (status, data, extraHeaders = {}) => ({
-  statusCode: status,
-  headers: {
-    "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type, x-api-key",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    ...extraHeaders,
-  },
-  body: JSON.stringify(data),
-});
-
-// handle preflight
-const handleOptions = () => jsonResponse(204, {});
-
-exports.handler = async (event, context) => {
+  // 解析请求体
+  let body;
   try {
-    if (event.httpMethod === "OPTIONS") {
-      return handleOptions();
-    }
-    if (event.httpMethod !== "POST") {
-      return jsonResponse(405, { error: "Method Not Allowed. Use POST." });
-    }
+    body = event.body ? JSON.parse(event.body) : {};
+  } catch {
+    return jsonResp(400, { error: "Invalid JSON body" });
+  }
 
-    const apiKey = process.env.FREEASTRO_API_KEY;
-    const upstreamUrl = process.env.FREEASTRO_API_URL || DEFAULT_URL;
+  // 兼容别名：lat/lon/tz -> latitude/longitude/timezone
+  const payload = {
+    year: num(body.year),
+    month: num(body.month),
+    day: num(body.day),
+    hour: num(body.hour),
+    minute: num(body.minute),
+    latitude: num(body.latitude ?? body.lat),
+    longitude: num(body.longitude ?? body.lon),
+    timezone: num(body.timezone ?? body.tz),
+    language: (body.language || "en").toString()
+  };
 
-    if (!apiKey) {
-      return jsonResponse(500, { error: "Missing FREEASTRO_API_KEY in environment." });
-    }
+  // 校验必填
+  const missing = Object.entries(payload)
+    .filter(([k, v]) =>
+      ["year", "month", "day", "hour", "minute", "latitude", "longitude", "timezone"].includes(k) &&
+      (v === null || Number.isNaN(v))
+    )
+    .map(([k]) => k);
 
-    let payload;
-    try {
-      payload = JSON.parse(event.body || "{}");
-    } catch (e) {
-      return jsonResponse(400, { error: "Invalid JSON body." });
-    }
+  if (missing.length) {
+    return jsonResp(400, { error: "Missing required fields", fields: missing });
+  }
 
-    // Validate required fields
-    const required = ["year", "month", "day", "hour", "minute", "latitude", "longitude", "timezone"];
-    const missing = required.filter((k) => payload[k] === undefined || payload[k] === null || payload[k] === "");
-    if (missing.length) {
-      return jsonResponse(400, {
-        error: "Missing required fields",
-        fields: missing,
-      });
-    }
+  // 组装上游请求
+  const upstreamUrl = process.env.FREEASTRO_API_URL || UPSTREAM_URL_FALLBACK;
+  const apiKey = process.env.FREEASTRO_API_KEY;
+  if (!apiKey) {
+    return jsonResp(500, { error: "Server configuration missing FREEASTRO_API_KEY." });
+  }
 
-    // Default language
-    if (!payload.language) payload.language = "en";
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-    // Abort/timeout after 45s
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 45_000);
-
-    // Do request
+  try {
     const res = await fetch(upstreamUrl, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
+        "content-type": "application/json",
+        "x-api-key": apiKey
       },
       body: JSON.stringify(payload),
-      signal: controller.signal,
-    }).catch((err) => {
-      // Normalize abort/timeouts etc
-      if (err && err.name === "AbortError") {
-        return { ok: false, status: 504, statusText: "Gateway Timeout", _timeout: true, _err: String(err) };
-      }
-      return { ok: false, status: 502, statusText: "Bad Gateway", _err: String(err) };
+      signal: controller.signal
     });
-    clearTimeout(timer);
-
-    // If fetch failed early (our synthetic object above)
-    if (!res || res._timeout || res._err) {
-      return jsonResponse(res && res.status ? res.status : 502, {
-        error: "Upstream request failed",
-        reason: res && (res._timeout ? "timeout" : res._err),
-        upstreamUrl,
-      });
-    }
+    clearTimeout(t);
 
     const text = await res.text();
     let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { raw: text };
-    }
+    try { data = JSON.parse(text); } catch { data = { raw: text }; }
 
-    // Pipe upstream status & body back to client
-    return jsonResponse(res.status, data);
+    // 透传上游状态码（200/4xx/5xx）
+    return {
+      statusCode: res.status,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(data)
+    };
   } catch (err) {
-    return jsonResponse(500, {
-      error: "Internal error in Netlify function",
-      detail: String(err && err.stack ? err.stack : err),
-    });
+    clearTimeout(t);
+    // 超时或网络错误
+    return jsonResp(504, { error: "Upstream request failed", reason: String(err && err.name === "AbortError" ? "timeout" : err) });
   }
 };
+
+// 小工具
+function jsonResp(status, obj) {
+  return {
+    statusCode: status,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(obj)
+  };
+}
+function num(x) {
+  if (x === null || x === undefined || x === "") return null;
+  const n = Number(x);
+  return Number.isFinite(n) ? n : null;
+}
