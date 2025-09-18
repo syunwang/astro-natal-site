@@ -1,98 +1,69 @@
-// netlify/functions/natal.js
-// Node 18+ on Netlify has global fetch.
 
-const UPSTREAM_URL_FALLBACK =
-  "https://json.freeastrologyapi.com/api/v1/western/natal-wheel-chart"; // 新的 json 域名
-const TIMEOUT_MS = 45000;
+// netlify/functions/natal.js
+const DEFAULT_API_URL = process.env.FREEASTRO_API_URL
+  || 'https://json.freeastrologyapi.com/api/v1/western/natal-wheel-chart';
+const API_KEY = process.env.FREEASTRO_API_KEY;
 
 exports.handler = async (event) => {
-  // 仅允许 POST
-  if (event.httpMethod !== "POST") {
-    return jsonResp(405, { error: "Method Not Allowed. Use POST." });
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Method Not Allowed. Use POST.' })
+    };
   }
 
-  // 解析请求体
-  let body;
+  if (!API_KEY) {
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Missing FREEASTRO_API_KEY' })
+    };
+  }
+
+  let data = {};
   try {
-    body = event.body ? JSON.parse(event.body) : {};
+    data = JSON.parse(event.body || '{}');
   } catch {
-    return jsonResp(400, { error: "Invalid JSON body" });
+    return {
+      statusCode: 400,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Invalid JSON' })
+    };
   }
 
-  // 兼容别名：lat/lon/tz -> latitude/longitude/timezone
-  const payload = {
-    year: num(body.year),
-    month: num(body.month),
-    day: num(body.day),
-    hour: num(body.hour),
-    minute: num(body.minute),
-    latitude: num(body.latitude ?? body.lat),
-    longitude: num(body.longitude ?? body.lon),
-    timezone: num(body.timezone ?? body.tz),
-    language: (body.language || "en").toString()
+  const body = {
+    year: Number(data.year),
+    month: Number(data.month),
+    day: Number(data.day),
+    hour: Number(data.hour),
+    minute: Number(data.minute),
+    latitude: Number(data.latitude ?? data.lat),
+    longitude: Number(data.longitude ?? data.lon),
+    timezone: Number(data.timezone ?? data.tz),
+    language: data.language || 'en'
   };
 
-  // 校验必填
-  const missing = Object.entries(payload)
-    .filter(([k, v]) =>
-      ["year", "month", "day", "hour", "minute", "latitude", "longitude", "timezone"].includes(k) &&
-      (v === null || Number.isNaN(v))
-    )
-    .map(([k]) => k);
-
-  if (missing.length) {
-    return jsonResp(400, { error: "Missing required fields", fields: missing });
-  }
-
-  // 组装上游请求
-  const upstreamUrl = process.env.FREEASTRO_API_URL || UPSTREAM_URL_FALLBACK;
-  const apiKey = process.env.FREEASTRO_API_KEY;
-  if (!apiKey) {
-    return jsonResp(500, { error: "Server configuration missing FREEASTRO_API_KEY." });
-  }
-
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
   try {
-    const res = await fetch(upstreamUrl, {
-      method: "POST",
+    const res = await fetch(DEFAULT_API_URL, {
+      method: 'POST',
       headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey
+        'Content-Type': 'application/json',
+        'x-api-key': API_KEY
       },
-      body: JSON.stringify(payload),
-      signal: controller.signal
+      body: JSON.stringify(body)
     });
-    clearTimeout(t);
-
     const text = await res.text();
-    let data;
-    try { data = JSON.parse(text); } catch { data = { raw: text }; }
-
-    // 透传上游状态码（200/4xx/5xx）
     return {
       statusCode: res.status,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(data)
+      headers: { 'Content-Type': 'application/json' },
+      body: text
     };
   } catch (err) {
-    clearTimeout(t);
-    // 超时或网络错误
-    return jsonResp(504, { error: "Upstream request failed", reason: String(err && err.name === "AbortError" ? "timeout" : err) });
+    return {
+      statusCode: 502,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Fetch failed', reason: String(err) })
+    };
   }
 };
-
-// 小工具
-function jsonResp(status, obj) {
-  return {
-    statusCode: status,
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(obj)
-  };
-}
-function num(x) {
-  if (x === null || x === undefined || x === "") return null;
-  const n = Number(x);
-  return Number.isFinite(n) ? n : null;
-}
