@@ -1,170 +1,173 @@
 <!doctype html>
-<html lang="zh-Hans">
+<html lang="zh-Hant">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Netlify Functions 测试（Natal SVG）</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>出生星盤（測試前端 / 調 Netlify Functions）</title>
   <style>
-    :root { --bg:#0e1116; --fg:#e6edf3; --muted:#9da7b3; --card:#161b22; --btn:#238636; --err:#f85149; }
-    html,body{height:100%}
-    body{margin:0; font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;
-         background:var(--bg); color:var(--fg);}
-    .wrap{max-width:980px; margin:24px auto; padding:0 16px}
-    h1{font-size:26px; margin:.2em 0 .6em}
-    .card{background:var(--card); border:1px solid #30363d; border-radius:10px; padding:18px; margin:16px 0}
-    .row{display:grid; gap:12px; grid-template-columns:repeat(2,minmax(0,1fr))}
-    label{font-size:14px; color:var(--muted)}
-    input,select{width:100%; background:#0b0f14; color:var(--fg); border:1px solid #30363d; border-radius:8px;
-                 padding:10px 12px; font-size:16px}
-    .actions{display:flex; gap:12px; margin-top:12px}
-    button{background:var(--btn); color:#fff; border:0; padding:12px 16px; border-radius:8px;
-           font-weight:600; cursor:pointer}
-    button.secondary{background:#30363d}
-    .log{white-space:pre-wrap; font-family:ui-monospace,Consolas,Menlo,monospace; font-size:13px; color:#a6d189}
-    .err{color:var(--err)}
-    .svgbox{background:#fff; border-radius:10px; padding:8px; overflow:auto; max-height:70vh}
+    :root { color-scheme: dark; }
+    body { font-family: system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", Segoe UI, Roboto, Helvetica, Arial, "Noto Sans", sans-serif; 
+           background:#0e1117; color:#e6edf3; margin:0; }
+    .wrap { max-width: 980px; margin: 28px auto; padding: 0 16px; }
+    h1 { font-size: 22px; margin: 0 0 18px; }
+    .row { display: grid; grid-template-columns: 220px 1fr; gap: 10px; margin-bottom: 12px; align-items: center; }
+    .row label { opacity: 0.9; }
+    input, select, textarea, button { 
+      background: #161b22; color:#e6edf3; border:1px solid #30363d; border-radius:10px; padding:12px 14px; font-size: 16px;
+    }
+    input:focus, select:focus, textarea:focus, button:focus { outline: 2px solid #1f6feb; }
+    button { cursor: pointer; border-radius: 12px; padding: 12px 16px; border: 1px solid #238636; background:#238636; }
+    button.secondary { border-color:#30363d; background:#161b22; }
+    .btns { display:flex; gap:10px; margin: 16px 0 8px; }
+    .card { background:#0b0f14; border:1px solid #30363d; border-radius:16px; padding:16px; margin-top:18px;}
+    pre { white-space: pre-wrap; word-break: break-all; margin:0; }
+    .muted { opacity: 0.7; font-size: 14px; }
+    .ok { color: #7ee787; }
+    .bad { color: #ff7b72; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>出生星盘（测试前端 / 调 Netlify Functions）</h1>
+    <h1>出生星盤（測試前端 / 調 Netlify Functions）</h1>
 
-    <div class="card">
-      <div class="row">
-        <div>
-          <label>出生日期</label>
-          <input id="date" type="date" value="1958-01-07"/>
-        </div>
-        <div>
-          <label>出生时间（24h）</label>
-          <input id="time" type="time" value="08:50"/>
-        </div>
-        <div>
-          <label>纬度 latitude（例如 22.99083）</label>
-          <input id="lat" type="text" value="22.99083" />
-        </div>
-        <div>
-          <label>经度 longitude（例如 120.21333）</label>
-          <input id="lng" type="text" value="120.21333" />
-        </div>
-        <div>
-          <label>时区（UTC 偏移，如台湾=8）</label>
-          <input id="tz" type="number" step="0.25" value="8"/>
-        </div>
-        <div>
-          <label>语言 language</label>
-          <select id="lang">
-            <option value="en">English</option>
-            <option value="zh">中文</option>
-          </select>
-        </div>
-      </div>
+    <div class="row">
+      <label for="birthDate">出生日期</label>
+      <input id="birthDate" type="date" value="1958-01-07" />
+    </div>
 
-      <div class="actions">
-        <button id="gen">产生星盘</button>
-        <button id="sample" class="secondary">填入示例</button>
-        <button id="clear" class="secondary">清空结果</button>
-      </div>
-      <div id="status" class="log" style="margin-top:10px;"></div>
+    <div class="row">
+      <label for="birthTime">出生時間（24h 或「上午 08:50／下午 8:05」）</label>
+      <input id="birthTime" type="text" value="上午 08:50" />
+    </div>
+
+    <div class="row">
+      <label for="lat">緯度 latitude</label>
+      <input id="lat" type="number" step="0.00001" value="22.99083" />
+    </div>
+
+    <div class="row">
+      <label for="lon">經度 longitude</label>
+      <input id="lon" type="number" step="0.00001" value="120.21333" />
+    </div>
+
+    <div class="row">
+      <label for="tz">時區 UTC 偏移</label>
+      <input id="tz" type="number" step="1" value="8" />
+    </div>
+
+    <div class="row">
+      <label for="lang">語言 language</label>
+      <select id="lang">
+        <option value="en" selected>English</option>
+        <option value="zh-Hant">繁體中文</option>
+        <option value="zh-Hans">簡體中文</option>
+      </select>
+    </div>
+
+    <div class="btns">
+      <button id="btnRun">產生星盤</button>
+      <button id="btnFill" class="secondary">填入示例</button>
+      <button id="btnClear" class="secondary">清空結果</button>
     </div>
 
     <div class="card">
-      <details open>
-        <summary>原始 API 返回</summary>
-        <pre id="raw" class="log"></pre>
+      <div class="muted">Request payload</div>
+      <pre id="payloadBox"></pre>
+    </div>
+
+    <div class="card">
+      <div>Functions 回應 <span id="status" class="muted"></span></div>
+      <pre id="resultBox"></pre>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary class="muted">原始 API 回傳</summary>
+        <pre id="upstreamBox"></pre>
       </details>
-      <div id="svgwrap" class="svgbox" style="display:none"></div>
-      <div id="errmsg" class="err"></div>
     </div>
   </div>
 
 <script>
-const $ = sel => document.querySelector(sel);
+function parseTimeTo24h(val) {
+  if (!val) return [0, 0];
+  const am = /上午|AM/i.test(val);
+  const pm = /下午|PM/i.test(val);
+  const m = val.match(/(\d{1,2})\s*:\s*(\d{2})/);
+  if (!m) return [0, 0];
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  if (pm && h < 12) h += 12;
+  if (am && h === 12) h = 0;
+  return [h, min];
+}
 
-function pad(n){return n.toString().padStart(2,'0')}
+function el(id){ return document.getElementById(id); }
+function showJSON(node, data){ node.textContent = JSON.stringify(data, null, 2); }
 
-$("#sample").onclick = () => {
-  $("#date").value = "1958-01-07";
-  $("#time").value = "08:50";
-  $("#lat").value  = "22.99083";
-  $("#lng").value  = "120.21333";
-  $("#tz").value   = "8";
-  $("#lang").value = "en";
-};
+async function run() {
+  const dateStr = el('birthDate').value;
+  const timeStr = el('birthTime').value;
+  const lat = parseFloat(el('lat').value);
+  const lon = parseFloat(el('lon').value);
+  const tz  = parseInt(el('tz').value, 10);
+  const language = el('lang').value || 'en';
 
-$("#clear").onclick = () => {
-  $("#raw").textContent = "";
-  $("#svgwrap").style.display = "none";
-  $("#svgwrap").innerHTML = "";
-  $("#errmsg").textContent = "";
-  $("#status").textContent = "";
-};
+  const d = new Date(dateStr);
+  const year  = d.getFullYear();
+  const month = d.getMonth() + 1;
+  const day   = d.getDate();
 
-$("#gen").onclick = async () => {
-  $("#status").textContent = "⏳ 正在请求 /.netlify/functions/natal …";
-  $("#errmsg").textContent = "";
-  $("#svgwrap").style.display = "none";
-  $("#svgwrap").innerHTML = "";
-  $("#raw").textContent = "";
+  const [hour, minute] = parseTimeTo24h(timeStr);
+
+  const payload = { year, month, day, hour, minute, lat, lon, tz, language };
+  showJSON(el('payloadBox'), payload);
+  el('upstreamBox').textContent = "";
+  el('resultBox').textContent = "";
+  el('status').textContent = "送出中…";
 
   try {
-    const [y,m,d] = $("#date").value.split("-").map(Number);
-    const [hh,mm] = $("#time").value.split(":").map(Number);
-    const lat = parseFloat($("#lat").value);
-    const lng = parseFloat($("#lng").value);
-    const tz  = parseFloat($("#tz").value);
-    const lang = $("#lang").value;
-
-    const payload = {
-      year: y, month: m, date: d,
-      hours: hh, minutes: mm, seconds: 0,
-      latitude: lat, longitude: lng, timezone: tz,
-      config: {
-        observation_point: "topocentric",
-        ayanamsha: "tropical",
-        house_system: "Placidus",
-        language: lang,
-        exclude_planets: [],
-        allowed_aspects: ["Conjunction","Opposition","Trine","Square","Sextile"]
-      }
-    };
-
-    const res = await fetch("/.netlify/functions/natal", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+    const res = await fetch('/.netlify/functions/natal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     });
-
     const text = await res.text();
-    let data;
-    try { data = JSON.parse(text); } catch(e) { data = { raw:text } }
+    el('status').textContent = `HTTP ${res.status}`;
+    el('resultBox').textContent = text;
 
-    $("#raw").textContent = JSON.stringify(data, null, 2);
-
-    if (!res.ok) {
-      $("#errmsg").textContent = "❌ HTTP " + res.status + " " + res.statusText;
-    }
-
-    if (data && data.svg) {
-      $("#svgwrap").style.display = "block";
-      // 直接把 SVG 片段嵌入
-      $("#svgwrap").innerHTML = data.svg;
-      $("#status").textContent = "✅ 已取得 SVG 并嵌入。";
-    } else if (data && data.svg_url) {
-      $("#status").textContent = "✅ 返回了 svg_url，已在下方 raw 中显示，可手动打开。";
-    } else if (data && data.message) {
-      $("#errmsg").textContent = "⚠️ " + data.message;
-      $("#status").textContent = "请求完成，但无 SVG 内容。";
-    } else if (data && data.raw) {
-      $("#status").textContent = "已返回非 JSON 内容，请查看 raw。";
-    } else {
-      $("#status").textContent = "请求完成。";
-    }
+    try {
+      const obj = JSON.parse(text);
+      if (obj && (obj.upstreamBody || obj.raw)) {
+        el('upstreamBox').textContent = JSON.stringify(obj.upstreamBody || obj.raw, null, 2);
+      }
+    } catch(e) {}
   } catch (err) {
-    $("#errmsg").textContent = "异常：" + err;
-    $("#status").textContent = "请求失败。";
+    el('status').textContent = '錯誤';
+    el('resultBox').textContent = String(err);
   }
-};
+}
+
+function fillDemo() {
+  el('birthDate').value = '1958-01-07';
+  el('birthTime').value = '上午 08:50';
+  el('lat').value = '22.99083';
+  el('lon').value = '120.21333';
+  el('tz').value = '8';
+  el('lang').value = 'en';
+  clearAll();
+}
+
+function clearAll() {
+  el('payloadBox').textContent = '';
+  el('resultBox').textContent = '';
+  el('upstreamBox').textContent = '';
+  el('status').textContent = '';
+}
+
+el('btnRun').addEventListener('click', run);
+el('btnFill').addEventListener('click', fillDemo);
+el('btnClear').addEventListener('click', clearAll);
 </script>
 </body>
 </html>
