@@ -1,69 +1,81 @@
 
 // netlify/functions/natal.js
-const DEFAULT_API_URL = process.env.FREEASTRO_API_URL
-  || 'https://json.freeastrologyapi.com/api/v1/western/natal-wheel-chart';
-const API_KEY = process.env.FREEASTRO_API_KEY;
+const UPSTREAM_DEFAULT =
+  "https://json.freeastrologyapi.com/api/v1/western/natal-wheel-chart";
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, x-api-key",
+};
+
+function safeParse(body) {
+  try { return JSON.parse(body || "{}"); } catch { return {}; }
+}
+function num(v) {
+  if (v === undefined || v === null || v === "") return undefined;
+  const n = Number(v); return Number.isFinite(n) ? n : undefined;
+}
 
 exports.handler = async (event) => {
-  if (event.httpMethod !== 'POST') {
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 200, headers: CORS_HEADERS, body: "" };
+  }
+  if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Method Not Allowed. Use POST.' })
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      body: JSON.stringify({ error: "Method Not Allowed. Use POST." }),
     };
   }
 
-  if (!API_KEY) {
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Missing FREEASTRO_API_KEY' })
-    };
-  }
-
-  let data = {};
-  try {
-    data = JSON.parse(event.body || '{}');
-  } catch {
+  const upstreamUrl =
+    process.env.FREEASTRO_API_URL?.trim() || UPSTREAM_DEFAULT;
+  const apiKey = process.env.FREEASTRO_API_KEY || "";
+  const input = safeParse(event.body);
+  const payload = {
+    year: num(input.year), month: num(input.month), day: num(input.day),
+    hour: num(input.hour), minute: num(input.minute),
+    latitude: num(input.lat) ?? num(input.latitude),
+    longitude: num(input.lon) ?? num(input.longitude),
+    timezone: num(input.tz) ?? num(input.timezone),
+    language: (input.language || "en").toString().trim(),
+  };
+  const missing = Object.entries({
+    year: payload.year, month: payload.month, day: payload.day,
+    hour: payload.hour, minute: payload.minute,
+    latitude: payload.latitude, longitude: payload.longitude,
+    timezone: payload.timezone,
+  }).filter(([, v]) => v === undefined).map(([k]) => k);
+  if (missing.length) {
     return {
       statusCode: 400,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Invalid JSON' })
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      body: JSON.stringify({ error: "Missing required fields", fields: missing }),
     };
   }
 
-  const body = {
-    year: Number(data.year),
-    month: Number(data.month),
-    day: Number(data.day),
-    hour: Number(data.hour),
-    minute: Number(data.minute),
-    latitude: Number(data.latitude ?? data.lat),
-    longitude: Number(data.longitude ?? data.lon),
-    timezone: Number(data.timezone ?? data.tz),
-    language: data.language || 'en'
-  };
-
   try {
-    const res = await fetch(DEFAULT_API_URL, {
-      method: 'POST',
+    const res = await fetch(upstreamUrl, {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': API_KEY
+        "Content-Type": "application/json",
+        ...(apiKey ? { "x-api-key": apiKey } : {}),
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(payload),
     });
     const text = await res.text();
+    let data; try { data = JSON.parse(text); } catch { data = { raw: text }; }
     return {
       statusCode: res.status,
-      headers: { 'Content-Type': 'application/json' },
-      body: text
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      body: JSON.stringify({ ok: res.ok, upstreamStatus: res.status, response: data }),
     };
   } catch (err) {
     return {
-      statusCode: 502,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Fetch failed', reason: String(err) })
+      statusCode: 500,
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      body: JSON.stringify({ error: "fetch failed", reason: String(err) }),
     };
   }
 };
