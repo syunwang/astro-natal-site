@@ -1,109 +1,102 @@
-// netlify/functions/natal.js
-const fetch = require("node-fetch"); // v2
+// Netlify Function: /natal
+// POST /.netlify/functions/natal  Content-Type: application/json
+// Body fields accepted (aliases supported):
+// year, month, day, hour, minute,
+// lat/latitude, lon/longitude, tz/timezone, language
+const fetch = require("node-fetch");
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST,OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type,x-api-key",
+};
 
 exports.handler = async (event) => {
-  const headers = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Content-Type": "application/json; charset=utf-8",
-  };
+  // Preflight
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 204, headers: CORS, body: "" };
+  }
+
+  if (event.httpMethod !== "POST") {
+    return {
+      statusCode: 405,
+      headers: CORS,
+      body: JSON.stringify({ error: "Method Not Allowed. Use POST." }),
+    };
+  }
 
   try {
-    if (event.httpMethod === "OPTIONS") return { statusCode: 204, headers };
-    if (event.httpMethod !== "POST") {
-      return {
-        statusCode: 405,
-        headers,
-        body: JSON.stringify({ error: "Method Not Allowed. Use POST." }),
-      };
-    }
-
-    let payload = {};
-    try {
-      payload = event.body ? JSON.parse(event.body) : {};
-    } catch {
+    if (!event.body) {
       return {
         statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: "Invalid JSON body" }),
+        headers: CORS,
+        body: JSON.stringify({ error: "Missing JSON body" }),
       };
     }
 
-    // Accept both lat/lon and latitude/longitude, tz/timezone
-    const body = {
-      year: Number(payload.year),
-      month: Number(payload.month),
-      day: Number(payload.day),
-      hour: Number(payload.hour),
-      minute: Number(payload.minute),
-      latitude: Number(payload.latitude ?? payload.lat),
-      longitude: Number(payload.longitude ?? payload.lon),
-      timezone: Number(payload.timezone ?? payload.tz),
-      language: payload.language || "en",
+    let body;
+    try { body = JSON.parse(event.body); }
+    catch {
+      return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: "Invalid JSON" }) };
+    }
+
+    // 參數標準化
+    const payload = {
+      year: Number(body.year),
+      month: Number(body.month),
+      day: Number(body.day),
+      hour: Number(body.hour),
+      minute: Number(body.minute),
+      latitude: body.latitude != null ? Number(body.latitude) : Number(body.lat),
+      longitude: body.longitude != null ? Number(body.longitude) : Number(body.lon),
+      timezone: body.timezone != null ? Number(body.timezone) : Number(body.tz),
+      language: (body.language || "en").toLowerCase(),
     };
 
-    const required = [
-      "year",
-      "month",
-      "day",
-      "hour",
-      "minute",
-      "latitude",
-      "longitude",
-      "timezone",
-    ];
-    const missing = required.filter(
-      (k) => body[k] === undefined || Number.isNaN(body[k])
-    );
+    // 必填檢查
+    const missing = [];
+    for (const k of ["year","month","day","hour","minute","latitude","longitude","timezone"]) {
+      if (!Number.isFinite(payload[k])) missing.push(k);
+    }
     if (missing.length) {
       return {
         statusCode: 400,
-        headers,
-        body: JSON.stringify({
-          error: "Missing required fields",
-          fields: missing,
-        }),
+        headers: CORS,
+        body: JSON.stringify({ error: "Missing required fields", fields: missing }),
       };
     }
 
-    const upstream =
-      process.env.FREEASTRO_API_URL ||
-      "https://json.freeastrologyapi.com/api/v1/western/natal-wheel-chart";
-    const apiKey = process.env.FREEASTRO_API_KEY || "";
+    // 呼叫上游
+    const apiUrl = process.env.FREEASTRO_API_URL;   // e.g. https://json.freeastrologyapi.com/api/v1/western/natal-wheel-chart
+    const apiKey = process.env.FREEASTRO_API_KEY;
 
-    const r = await fetch(upstream, {
+    if (!apiUrl || !apiKey) {
+      return {
+        statusCode: 500,
+        headers: CORS,
+        body: JSON.stringify({ error: "Server not configured: FREEASTRO_API_URL / FREEASTRO_API_KEY missing" }),
+      };
+    }
+
+    const r = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-api-key": apiKey,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
     });
 
-    const text = await r.text();
-    if (r.ok) {
-      // Upstream may return JSON or SVG string; return both safely
-      try {
-        const json = JSON.parse(text);
-        return { statusCode: 200, headers, body: JSON.stringify(json) };
-      } catch {
-        return { statusCode: 200, headers, body: JSON.stringify({ raw: text }) };
-      }
-    } else {
-      let err;
-      try {
-        err = JSON.parse(text);
-      } catch {
-        err = { raw: text };
-      }
-      return { statusCode: r.status, headers, body: JSON.stringify(err) };
-    }
-  } catch (e) {
+    const raw = await r.text();
+    let data; try { data = JSON.parse(raw); } catch { data = raw; }
+
+    // 把上游 status 原樣帶回（方便你在前端與 PowerShell 看到真實錯誤）
+    return { statusCode: r.status, headers: CORS, body: JSON.stringify(data) };
+  } catch (err) {
     return {
       statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: e.message || String(e) }),
+      headers: CORS,
+      body: JSON.stringify({ error: "Natal function crashed", detail: String(err) }),
     };
   }
 };
