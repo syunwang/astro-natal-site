@@ -1,44 +1,58 @@
-// GET /.netlify/functions/geo?place=Tainan,%20Taiwan
+// netlify/functions/geo.js
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET,OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type,Authorization",
 };
 
 exports.handler = async (event) => {
+  // CORS preflight
   if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 204, headers: CORS, body: "" };
-  }
-  if (event.httpMethod !== "GET") {
-    return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: "Method Not Allowed. Use GET." }) };
+    return { statusCode: 204, headers: CORS };
   }
 
   try {
-    const url = new URL(event.rawUrl || `http://x${event.path}${event.rawQuery ? "?" + event.rawQuery : ""}`);
-    const place = url.searchParams.get("place");
-    if (!place || !place.trim()) {
-      return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: "Missing required query param: place" }) };
+    const place = event.queryStringParameters?.place || "";
+    if (!place) {
+      return {
+        statusCode: 400,
+        headers: CORS,
+        body: JSON.stringify({ error: "Missing query parameter: place" }),
+      };
     }
 
-    const base = process.env.FREEASTRO_GEO_URL || "https://nominatim.openstreetmap.org/search";
-    const geoUrl = `${base}?format=json&q=${encodeURIComponent(place)}&limit=1`;
+    const base =
+      process.env.FREEASTRO_GEO_URL ||
+      "https://nominatim.openstreetmap.org/search?format=json&q=";
 
-    const r = await fetch(geoUrl, { headers: { "User-Agent": "astro-natal-site/1.0 (Netlify Function)" } });
-    const txt = await r.text();
-    let data; try { data = JSON.parse(txt); } catch { data = txt; }
+    const url = `${base}${encodeURIComponent(place)}`;
 
-    if (!r.ok) {
-      return { statusCode: r.status, headers: CORS, body: JSON.stringify({ error: "Geo upstream error", status: r.status, body: data }) };
+    // ✅ Node18+ 自带 fetch
+    const res = await fetch(url, {
+      headers: { "User-Agent": "netlify-function/geo" },
+    });
+
+    if (!res.ok) {
+      const raw = await res.text().catch(() => "");
+      return {
+        statusCode: res.status,
+        headers: CORS,
+        body: JSON.stringify({ error: "Geo upstream error", raw }),
+      };
     }
 
-    const first = Array.isArray(data) ? data[0] : data;
-    if (!first) return { statusCode: 404, headers: CORS, body: JSON.stringify({ error: "Place not found" }) };
-
-    const lat = parseFloat(first.lat ?? first.latitude);
-    const lon = parseFloat(first.lon ?? first.longitude);
-    return { statusCode: 200, headers: CORS, body: JSON.stringify({ place, lat, lon, raw: first }) };
-  } catch (e) {
-    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: "Geo function crashed", detail: String(e) }) };
+    const data = await res.json();
+    return {
+      statusCode: 200,
+      headers: { ...CORS, "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    };
+  } catch (err) {
+    return {
+      statusCode: 500,
+      headers: CORS,
+      body: JSON.stringify({ error: "Geo function error", message: String(err) }),
+    };
   }
 };

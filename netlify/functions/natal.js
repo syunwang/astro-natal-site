@@ -1,63 +1,27 @@
-// Netlify Function: /natal
-// POST /.netlify/functions/natal  Content-Type: application/json
-// Body fields accepted (aliases supported):
-// year, month, day, hour, minute,
-// lat/latitude, lon/longitude, tz/timezone, language
-const fetch = require("node-fetch");
+// netlify/functions/natal.js
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST,OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type,x-api-key",
+  "Access-Control-Allow-Headers": "Content-Type,Authorization",
 };
 
 exports.handler = async (event) => {
-  // Preflight
+  // CORS preflight
   if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 204, headers: CORS, body: "" };
+    return { statusCode: 204, headers: CORS };
   }
 
   if (event.httpMethod !== "POST") {
-    return {
-      statusCode: 405,
-      headers: CORS,
-      body: JSON.stringify({ error: "Method Not Allowed. Use POST." }),
-    };
+    return { statusCode: 405, headers: CORS, body: "Method Not Allowed" };
   }
 
   try {
-    if (!event.body) {
-      return {
-        statusCode: 400,
-        headers: CORS,
-        body: JSON.stringify({ error: "Missing JSON body" }),
-      };
-    }
+    const body = JSON.parse(event.body || "{}");
 
-    let body;
-    try { body = JSON.parse(event.body); }
-    catch {
-      return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: "Invalid JSON" }) };
-    }
-
-    // 參數標準化
-    const payload = {
-      year: Number(body.year),
-      month: Number(body.month),
-      day: Number(body.day),
-      hour: Number(body.hour),
-      minute: Number(body.minute),
-      latitude: body.latitude != null ? Number(body.latitude) : Number(body.lat),
-      longitude: body.longitude != null ? Number(body.longitude) : Number(body.lon),
-      timezone: body.timezone != null ? Number(body.timezone) : Number(body.tz),
-      language: (body.language || "en").toLowerCase(),
-    };
-
-    // 必填檢查
-    const missing = [];
-    for (const k of ["year","month","day","hour","minute","latitude","longitude","timezone"]) {
-      if (!Number.isFinite(payload[k])) missing.push(k);
-    }
+    // 必填字段校验
+    const required = ["year", "month", "day", "hour", "minute", "lat", "lon", "tz"];
+    const missing = required.filter((k) => body[k] === undefined || body[k] === null);
     if (missing.length) {
       return {
         statusCode: 400,
@@ -66,37 +30,70 @@ exports.handler = async (event) => {
       };
     }
 
-    // 呼叫上游
-    const apiUrl = process.env.FREEASTRO_API_URL;   // e.g. https://json.freeastrologyapi.com/api/v1/western/natal-wheel-chart
+    const base = process.env.FREEASTRO_API_URL; // 例如 https://json.freeastrologyapi.com/v1/natal
     const apiKey = process.env.FREEASTRO_API_KEY;
 
-    if (!apiUrl || !apiKey) {
+    if (!base || !apiKey) {
       return {
         statusCode: 500,
         headers: CORS,
-        body: JSON.stringify({ error: "Server not configured: FREEASTRO_API_URL / FREEASTRO_API_KEY missing" }),
+        body: JSON.stringify({
+          error: "Server misconfigured",
+          hint: "FREEASTRO_API_URL or FREEASTRO_API_KEY is missing",
+        }),
       };
     }
 
-    const r = await fetch(apiUrl, {
+    const headers = {
+      "Content-Type": "application/json",
+      // 两种都带上，兼容不同后端约定
+      "x-api-key": apiKey,
+      Authorization: `Bearer ${apiKey}`,
+    };
+
+    // ✅ Node18+ 自带 fetch
+    const res = await fetch(base, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-      },
-      body: JSON.stringify(payload),
+      headers,
+      body: JSON.stringify({
+        year: body.year,
+        month: body.month,
+        day: body.day,
+        hour: body.hour,
+        minute: body.minute,
+        latitude: body.lat,   // 注意：如果上游期望 lat/lon 改这里
+        longitude: body.lon,
+        timezone: body.tz,
+        language: body.language || "en",
+      }),
     });
 
-    const raw = await r.text();
-    let data; try { data = JSON.parse(raw); } catch { data = raw; }
+    const rawText = await res.text();
+    let json;
+    try {
+      json = JSON.parse(rawText);
+    } catch {
+      json = { raw: rawText };
+    }
 
-    // 把上游 status 原樣帶回（方便你在前端與 PowerShell 看到真實錯誤）
-    return { statusCode: r.status, headers: CORS, body: JSON.stringify(data) };
+    if (!res.ok) {
+      return {
+        statusCode: res.status,
+        headers: CORS,
+        body: JSON.stringify({ error: "Upstream error", body: json }),
+      };
+    }
+
+    return {
+      statusCode: 200,
+      headers: { ...CORS, "Content-Type": "application/json" },
+      body: JSON.stringify(json),
+    };
   } catch (err) {
     return {
       statusCode: 500,
       headers: CORS,
-      body: JSON.stringify({ error: "Natal function crashed", detail: String(err) }),
+      body: JSON.stringify({ error: "Natal function error", message: String(err) }),
     };
   }
 };
