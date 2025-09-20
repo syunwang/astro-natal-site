@@ -1,81 +1,109 @@
-
 // netlify/functions/natal.js
-const UPSTREAM_DEFAULT =
-  "https://json.freeastrologyapi.com/api/v1/western/natal-wheel-chart";
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, x-api-key",
-};
-
-function safeParse(body) {
-  try { return JSON.parse(body || "{}"); } catch { return {}; }
-}
-function num(v) {
-  if (v === undefined || v === null || v === "") return undefined;
-  const n = Number(v); return Number.isFinite(n) ? n : undefined;
-}
+const fetch = require("node-fetch"); // v2
 
 exports.handler = async (event) => {
-  if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 200, headers: CORS_HEADERS, body: "" };
-  }
-  if (event.httpMethod !== "POST") {
-    return {
-      statusCode: 405,
-      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      body: JSON.stringify({ error: "Method Not Allowed. Use POST." }),
-    };
-  }
-
-  const upstreamUrl =
-    process.env.FREEASTRO_API_URL?.trim() || UPSTREAM_DEFAULT;
-  const apiKey = process.env.FREEASTRO_API_KEY || "";
-  const input = safeParse(event.body);
-  const payload = {
-    year: num(input.year), month: num(input.month), day: num(input.day),
-    hour: num(input.hour), minute: num(input.minute),
-    latitude: num(input.lat) ?? num(input.latitude),
-    longitude: num(input.lon) ?? num(input.longitude),
-    timezone: num(input.tz) ?? num(input.timezone),
-    language: (input.language || "en").toString().trim(),
+  const headers = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Content-Type": "application/json; charset=utf-8",
   };
-  const missing = Object.entries({
-    year: payload.year, month: payload.month, day: payload.day,
-    hour: payload.hour, minute: payload.minute,
-    latitude: payload.latitude, longitude: payload.longitude,
-    timezone: payload.timezone,
-  }).filter(([, v]) => v === undefined).map(([k]) => k);
-  if (missing.length) {
-    return {
-      statusCode: 400,
-      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      body: JSON.stringify({ error: "Missing required fields", fields: missing }),
-    };
-  }
 
   try {
-    const res = await fetch(upstreamUrl, {
+    if (event.httpMethod === "OPTIONS") return { statusCode: 204, headers };
+    if (event.httpMethod !== "POST") {
+      return {
+        statusCode: 405,
+        headers,
+        body: JSON.stringify({ error: "Method Not Allowed. Use POST." }),
+      };
+    }
+
+    let payload = {};
+    try {
+      payload = event.body ? JSON.parse(event.body) : {};
+    } catch {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: "Invalid JSON body" }),
+      };
+    }
+
+    // Accept both lat/lon and latitude/longitude, tz/timezone
+    const body = {
+      year: Number(payload.year),
+      month: Number(payload.month),
+      day: Number(payload.day),
+      hour: Number(payload.hour),
+      minute: Number(payload.minute),
+      latitude: Number(payload.latitude ?? payload.lat),
+      longitude: Number(payload.longitude ?? payload.lon),
+      timezone: Number(payload.timezone ?? payload.tz),
+      language: payload.language || "en",
+    };
+
+    const required = [
+      "year",
+      "month",
+      "day",
+      "hour",
+      "minute",
+      "latitude",
+      "longitude",
+      "timezone",
+    ];
+    const missing = required.filter(
+      (k) => body[k] === undefined || Number.isNaN(body[k])
+    );
+    if (missing.length) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({
+          error: "Missing required fields",
+          fields: missing,
+        }),
+      };
+    }
+
+    const upstream =
+      process.env.FREEASTRO_API_URL ||
+      "https://json.freeastrologyapi.com/api/v1/western/natal-wheel-chart";
+    const apiKey = process.env.FREEASTRO_API_KEY || "";
+
+    const r = await fetch(upstream, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(apiKey ? { "x-api-key": apiKey } : {}),
+        "x-api-key": apiKey,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
-    const text = await res.text();
-    let data; try { data = JSON.parse(text); } catch { data = { raw: text }; }
-    return {
-      statusCode: res.status,
-      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      body: JSON.stringify({ ok: res.ok, upstreamStatus: res.status, response: data }),
-    };
-  } catch (err) {
+
+    const text = await r.text();
+    if (r.ok) {
+      // Upstream may return JSON or SVG string; return both safely
+      try {
+        const json = JSON.parse(text);
+        return { statusCode: 200, headers, body: JSON.stringify(json) };
+      } catch {
+        return { statusCode: 200, headers, body: JSON.stringify({ raw: text }) };
+      }
+    } else {
+      let err;
+      try {
+        err = JSON.parse(text);
+      } catch {
+        err = { raw: text };
+      }
+      return { statusCode: r.status, headers, body: JSON.stringify(err) };
+    }
+  } catch (e) {
     return {
       statusCode: 500,
-      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      body: JSON.stringify({ error: "fetch failed", reason: String(err) }),
+      headers,
+      body: JSON.stringify({ error: e.message || String(e) }),
     };
   }
 };
