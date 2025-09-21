@@ -1,6 +1,7 @@
+
 [build]
-  command = ""        # 不跑 build
-  publish = "."       # 站点根目录是仓库根（如你的 index/test 页面就在根）
+  publish = "."
 
 [functions]
-  node_bundler = "esbuild"   # 让函数打包更稳
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
