@@ -1,0 +1,30 @@
+{
+  "name": "astro-natal-site",
+  "version": "1.0.0",
+  "description": "包含：前端（24h 时间、手动经纬度、内嵌SVG）、`/geo` 与 `/natal` Netlify Functions。",
+ 
+  "scripts": {
+    "dev": "netlify dev --staticServerPort 4001",
+    "dev:4000": "netlify dev --staticServerPort 4000",
+    "dev:3999": "netlify dev --staticServerPort 3999",
+    "deploy": "netlify deploy --prod"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/syunwang/astro-natal-site.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/syunwang/astro-natal-site/issues"
+  },
+  "homepage": "https://github.com/syunwang/astro-natal-site#readme",
+  "dependencies": {
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "netlify-cli": "^23.6.0"
+  }
+}
